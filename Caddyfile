@@ -1,0 +1,28 @@
+# Replace your-domain.com with your actual domain.
+# Caddy automatically obtains and renews TLS certificates via Let's Encrypt.
+# Port 80 and 443 must be open and the domain must point to this server.
+
+your-domain.com {
+    reverse_proxy api:8080
+
+    header {
+        # Security headers
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Content-Security-Policy "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox"
+        -Server
+    }
+
+    # Health check endpoint is public — all others require bearer auth (enforced by API)
+    @health path /health
+    handle @health {
+        reverse_proxy api:8080
+    }
+
+    log {
+        output file /var/log/caddy/access.log
+        format json
+    }
+}

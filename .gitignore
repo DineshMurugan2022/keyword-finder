@@ -1,0 +1,14 @@
+.venv/
+.env
+**/.env
+.env.production
+data/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.adk/
+.playwright-mcp/
+*.png
+*.html
+

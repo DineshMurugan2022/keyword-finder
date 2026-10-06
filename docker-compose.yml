@@ -1,0 +1,92 @@
+services:
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: rankings
+      POSTGRES_USER: rankings
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rankings"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    build: .
+    command: rank-agent worker
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      RANK_DATABASE_URL: postgresql+psycopg://rankings:${POSTGRES_PASSWORD}@db/rankings
+      PLAYWRIGHT_BROWSERS_PATH: /home/appuser/.cache/ms-playwright
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - evidence_data:/app/data
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 2g
+
+  scheduler:
+    build: .
+    command: rank-agent scheduler --config /app/project.json
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      RANK_DATABASE_URL: postgresql+psycopg://rankings:${POSTGRES_PASSWORD}@db/rankings
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - evidence_data:/app/data
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256m
+
+  api:
+    build: .
+    command: uvicorn ranking_agent.api:app --host 0.0.0.0 --port 8080 --workers 2
+    restart: unless-stopped
+    env_file: .env.production
+    environment:
+      RANK_DATABASE_URL: postgresql+psycopg://rankings:${POSTGRES_PASSWORD}@db/rankings
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - evidence_data:/app/data
+    expose:
+      - "8080"
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512m
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  evidence_data:
+  caddy_data:
+  caddy_config:
